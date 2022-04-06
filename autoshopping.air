@@ -1,0 +1,132 @@
+# -*- encoding=utf8 -*-
+__author__ = "hellg"
+
+from airtest.core.api import *
+
+auto_setup(__file__)
+
+import json
+from poco.drivers.android.uiautomation import AndroidUiautomationPoco
+poco = AndroidUiautomationPoco(use_airtest_input=True, screenshot_each_action=False)
+
+class DailyProduct():
+    def __init__(self,keyword):
+        self.keyword = keyword
+        self.product = None
+    
+class Keyword():    
+    def __init__(self,sku,name):
+        self.sku = sku
+        self.name = name
+    
+class AutoShopping(list):
+    
+    def __init__(self):
+        self.daily_products = []
+    
+    def init_shopping_cart(self):
+        poco(text="购物车").click()
+        cb_all = poco("com.yaya.zone:id/cb_all")
+        if cb_all.exists() and cb_all.attr("checked") == False:
+            cb_all.click()
+        delete_btn = poco(text="删除")
+        if delete_btn.exists() and delete_btn.attr("enabled") == True:            
+            delete_btn.click()
+            poco(text="确定").click()
+        while True:
+            clear_shopping_cart_btn = poco(text="清空失效商品")
+            if clear_shopping_cart_btn.exists():
+                clear_shopping_cart_btn.click()
+                sleep(0.5)
+                break
+            else:
+                sold_outs = poco(text="补货中")
+                if len(sold_outs) > 0:
+                    poco("com.yaya.zone:id/list_good_car").swipe([0,-0.5])
+                else:
+                    break
+        poco(text="首页").click()   
+
+    def add_to_shopping_cart(self):
+        poco(text="搜索").click()
+        for product in self.daily_products:        
+            search_bar = poco("com.yaya.zone:id/rl_search_bar")
+            search_bar_text_item = search_bar.child("com.yaya.zone:id/ll_line").child("com.yaya.zone:id/et_what_search")
+            search_bar_btn = search_bar.child("com.yaya.zone:id/btn_cancel")
+            search_bar_text_item.set_text(product.keyword.name)
+            search_bar_btn.click()
+            poco("com.yaya.zone:id/changeItemsButton").click()
+            list_view = poco("com.yaya.zone:id/iv_add_cart")
+            for view in list_view:
+                tv_name = view.parent().parent().parent().child("com.yaya.zone:id/tv_name")
+                if tv_name.exists() and tv_name.get_text().find(product.keyword.name) >= 0:
+                    view.click()
+            poco("com.yaya.zone:id/iv_back").click()
+        poco("com.yaya.zone:id/iv_search_back").click()
+    
+    def loop_shopping_cart(self):
+        poco(text="购物车").click()
+        poco("com.yaya.zone:id/list_good_car").swipe([0, 0.2])
+        while True:
+            cb_good_items = poco("com.yaya.zone:id/cb_good_item")
+            if len(cb_good_items) > 0:
+                for cb_good_item in cb_good_items:
+                    tv_title = cb_good_item.parent().child("com.yaya.zone:id/cl_content").child("com.yaya.zone:id/tv_title")
+                    is_exists = False
+                    for product in self.daily_products:
+                        if product.product == tv_title.get_text():
+                            is_exists = True
+                            break
+                    if is_exists:
+                        if cb_good_item.attr("checked") == False:
+                            cb_good_item.click()
+                        continue                     
+
+                    for product in self.daily_products:                        
+                        if tv_title.get_text().find(product.keyword.name) >= 0:
+                            if product.product == None:
+                                product.product = tv_title.get_text()
+                                break
+                            else:
+                                if cb_good_item.attr("checked") == True:
+                                    cb_good_item.click()
+                poco("com.yaya.zone:id/list_good_car").swipe([0, -0.2])
+            else:
+                is_loop = False
+                for product in self.daily_products:
+                    if product.product == None:
+                        is_loop = True
+                        break
+                if is_loop:
+                    poco(text="首页").click()
+                    poco(text="购物车").click()
+                    poco("com.yaya.zone:id/list_good_car").swipe([0, 0.2])
+                else:
+                    break
+                    
+    def goto_settle(self,password):
+        poco("com.yaya.zone:id/btn_submit").click()
+        poco("com.yaya.zone:id/tv_submit").click()
+        payload_keyboard = poco("com.yaya.zone:id/passEditText")
+        if payload_keyboard.exists() == True:
+            payload_keyboard.set_text(password)
+            sleep(5.0)
+            yosemite = poco(text="Yosemite")
+            if yosemite.exists():
+                poco("com.android.systemui:id/back").click()
+                poco("com.android.systemui:id/back").click()
+                self.goto_settle(password)
+
+            
+autoShopping = AutoShopping()
+
+#添加每日想要抢购的商品关键词
+autoShopping.daily_products.append(DailyProduct(Keyword("速冻","水饺")))
+autoShopping.daily_products.append(DailyProduct(Keyword("蔬菜","番茄")))
+
+autoShopping.init_shopping_cart()
+autoShopping.add_to_shopping_cart()
+autoShopping.loop_shopping_cart()
+
+#改成自己的支付密码
+autoShopping.goto_settle(111111)
